@@ -1,8 +1,8 @@
 Gem::Specification.new do |s|
   s.name = 'xautobrowse'
-  s.version = '0.1.0'
-  s.summary = "A poor man's web automation tool primarily for ' + \
-      'Firefox in an X windows system."
+  s.version = '0.1.1'
+  s.summary = "A poor man's web automation tool primarily for " + \
+      "Firefox in an X windows system."
   s.authors = ['James Robertson']
   s.files = Dir['lib/xautobrowse.rb']
   s.add_runtime_dependency('xdo', '~> 0.0', '>=0.0.4')  

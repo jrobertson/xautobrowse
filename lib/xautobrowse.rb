@@ -5,6 +5,12 @@
 # description: Runs on an X Windows system (e.g. Debian running LXDE)
 #              Primarily tested using Firefox (52.6.0 (64-bit)) on Debian.
 
+
+# modifications
+
+# 28 Jan 2018: feature: Chromium is now supported
+
+
 require 'wmctrl'
 require 'nokorexi'
 require 'clipboard'
@@ -16,14 +22,15 @@ require "xdo/xwindow"
 
 class XAutoBrowse
 
-  def initialize(browser_name, debug: false)
+  def initialize(browser= :firefox, debug: false)
 
-    @debug = debug
+    @browser, @debug = browser, debug
     
     @wm = WMCtrl.instance
-    spawn(browser_name)
-    sleep 4
-    id = XDo::XWindow.wait_for_window(browser_name)
+    spawn(browser.to_s)
+    sleep 5
+    
+    id = XDo::XWindow.wait_for_window(browser)
     xwin = XDo::XWindow.new(id)
     title = xwin.title
     puts 'title:  ' + title.inspect if @debug
@@ -32,7 +39,7 @@ class XAutoBrowse
     
     a = @wm.list_windows true
     puts 'a: '  + a.inspect if @debug
-    r = a.find {|x| x[:title] =~ /#{browser_name}$/i}
+    r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
     @id = r[:id]
 
     @x, @y, @width, @height = *r[:geometry]
@@ -57,6 +64,7 @@ class XAutoBrowse
     
     activate()
     sleep 2
+    
     if block_given? then
       yield(self)
     end
@@ -71,9 +79,8 @@ class XAutoBrowse
     sleep 0.5
     XDo::Keyboard.ctrl_l
     sleep 0.5
-    XDo::Keyboard.type(url)
-    XDo::Keyboard.return
-    sleep 5
+    enter(url)
+    sleep 4
 
   end  
 
@@ -89,25 +96,19 @@ class XAutoBrowse
   
   def text_field(klass: nil, id: nil, name: nil, value: '')
     
-    XDo::Keyboard.ctrl_shift_k # web console
-    sleep 5
+    console  = @browser == :firefox ? :ctrl_shift_k : :ctrl_shift_i
+    XDo::Keyboard.send console # web console
     
-    if klass then
-      XDo::Keyboard.type("r = document.querySelector('#{klass}')")
-    elsif id then
-      XDo::Keyboard.type("r = document.getElementById(\"#{id}\")")
-    end
     sleep 3
-    XDo::Keyboard.return              
-    sleep 2
-    XDo::Keyboard.type("r.value = \"\"")
-    sleep 2
-    XDo::Keyboard.return    
-    sleep 1
-    XDo::Keyboard.type("r.focus()")
-    sleep 2
-    XDo::Keyboard.return
-    sleep 2
+    
+    cmd = if klass then
+      "r = document.querySelector('#{klass}')"
+    elsif id then
+      "r = document.getElementById(\"#{id}\")"
+    end
+
+    [cmd, "r.value = \"\"", "r.focus()"].each {|x| enter x}
+    
     XDo::Keyboard.ctrl_shift_i  # toggle tools
     sleep 2
     XDo::Keyboard.type(value)
@@ -131,6 +132,14 @@ class XAutoBrowse
     sleep 0.5
     XDo::Keyboard.ctrl_u  # View source code
   end
+  
+  private
+  
+  def enter(s)
+    XDo::Keyboard.type(s)
+    sleep 0.8
+    XDo::Keyboard.return    
+    sleep 1  
+  end
 
 end
-
