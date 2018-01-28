@@ -8,7 +8,8 @@
 
 # modifications
 
-# 28 Jan 2018: feature: Chromium is now supported
+# 28 Jan 2018: feature: Chromium is now supported. 
+#                     A custom accesskey can now be used to jump to an element.
 
 
 require 'wmctrl'
@@ -27,8 +28,7 @@ class XAutoBrowse
     @browser, @debug = browser, debug
     
     @wm = WMCtrl.instance
-    spawn(browser.to_s)
-    sleep 5
+    spawn(browser.to_s); sleep 5
     
     id = XDo::XWindow.wait_for_window(browser)
     xwin = XDo::XWindow.new(id)
@@ -45,6 +45,15 @@ class XAutoBrowse
     @x, @y, @width, @height = *r[:geometry]
 
   end
+  
+  # custom accesskey (e.g. CTRL+SHIFT+S) typically used to reference an 
+  # element on the web page
+  #
+  def accesskey(key)
+    XDo::Keyboard.send key.to_sym
+  end
+  
+  alias access_key accesskey
 
   def activate()
     @wm.action_window(@id, :activate)
@@ -52,35 +61,52 @@ class XAutoBrowse
   
   def copy_source()
     
-    view_source()
-    sleep 3
-    XDo::Keyboard.ctrl_a # select all
+    view_source(); sleep 3
+    ctrl_a() # select all
     sleep 1
-    XDo::Keyboard.ctrl_c # copy the source code to the clipboard
+    ctrl_c() # copy the source code to the clipboard
     
   end
   
+  # select all
+  #
+  def ctrl_a() XDo::Keyboard.ctrl_a  end
+  
+  # copy
+  #
+  def ctrl_c() XDo::Keyboard.ctrl_c  end
+  
+  # jump to the location bar
+  #
+  def ctrl_l() XDo::Keyboard.ctrl_l  end  
+  
+  # view source code
+  #
+  def ctrl_u() XDo::Keyboard.ctrl_u  end  
+
+  # developer tools
+  #
+  def ctrl_shift_i() XDo::Keyboard.ctrl_shift_i end    
+  
+  # submit a form by pressing return
+  #
   def go()
     
-    activate()
-    sleep 2
-    
     if block_given? then
-      yield(self)
+      
+      activate(); sleep 2    
+      yield(self)     
+      carriage_return()
+      
     end
-    
-    XDo::Keyboard.return        
     
   end
   
   def goto(url)
     
-    @wm.action_window(@id, :activate)
-    sleep 0.5
-    XDo::Keyboard.ctrl_l
-    sleep 0.5
-    enter(url)
-    sleep 4
+    activate(); sleep 0.5
+    ctrl_l();   sleep 0.5
+    enter(url); sleep 4
 
   end  
 
@@ -94,10 +120,20 @@ class XAutoBrowse
     @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
   end
   
+  def carriage_return()
+    XDo::Keyboard.return
+  end
+  
+  alias cr carriage_return
+  
+  def tab(n=1)
+    XDo::Keyboard.simulate("{TAB}" * n)
+  end
+  
   def text_field(klass: nil, id: nil, name: nil, value: '')
     
     console  = @browser == :firefox ? :ctrl_shift_k : :ctrl_shift_i
-    XDo::Keyboard.send console # web console
+    method(console).call # web console
     
     sleep 3
     
@@ -109,37 +145,33 @@ class XAutoBrowse
 
     [cmd, "r.value = \"\"", "r.focus()"].each {|x| enter x}
     
-    XDo::Keyboard.ctrl_shift_i  # toggle tools
+    ctrl_shift_i()  # toggle tools
     sleep 2
-    XDo::Keyboard.type(value)
-    sleep 2
+    type(value); sleep 1
 
   end
   
   def to_doc()
-    copy_source()
-    sleep 0.5
+    copy_source(); sleep 0.5
     Nokorexi.new(Clipboard.paste).to_doc
+  end
+  
+  def type(s)
+    XDo::Keyboard.type(s)
   end
   
   def view_source()
     
-    @wm.action_window(@id, :activate)
-    sleep 0.5
-    XDo::Keyboard.ctrl_l # jump to the location bar
+    activate(); sleep 0.5
+    ctrl_l() # jump to the location bar
     sleep 0.6
-    XDo::Keyboard.simulate("{TAB}" * 2)
-    sleep 0.5
-    XDo::Keyboard.ctrl_u  # View source code
-  end
+    tab(2); sleep 0.5
+    ctrl_u()  # View source code
+    
+  end  
   
-  private
-  
-  def enter(s)
-    XDo::Keyboard.type(s)
-    sleep 0.8
-    XDo::Keyboard.return    
-    sleep 1  
-  end
+  # input some text
+  #
+  def enter(s) type(s); sleep 0.8; carriage_return(); sleep 1  end
 
 end
