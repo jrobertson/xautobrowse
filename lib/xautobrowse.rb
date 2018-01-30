@@ -8,6 +8,9 @@
 
 # modifications
 
+# 30 Jan 2018: feature: Now uses the gem universal_dom_remote to 
+#                       connect to the browser via websockets. 
+#                       A window can now be closed remotely.
 # 28 Jan 2018: feature: Chromium is now supported. 
 #                     A custom accesskey can now be used to jump to an element.
 
@@ -18,6 +21,7 @@ require 'clipboard'
 require 'xdo/mouse'
 require 'xdo/keyboard'
 require 'xdo/xwindow'
+require 'sps-pub'
 require 'universal_dom_remote'
 
 
@@ -26,11 +30,8 @@ class XAutoBrowse
   at_exit() do
     
     puts 'shutting down ...'
-    EventMachine.stop    
-    sleep 3
-    `ruby -r sps-pub -e "SPSPub.notice('shutdown', host: \
-        '127.0.0.1', port: '55000'); sleep 0.4"`
-    
+    EventMachine.stop
+    SPSPub.notice('shutdown', host: '127.0.0.1', port: '55000'); sleep 0.5    
     
   end
   
@@ -40,11 +41,11 @@ class XAutoBrowse
     @browser, @debug = browser, debug
     
     @wm = WMCtrl.instance
-    spawn(browser.to_s); sleep 5
+    spawn(browser.to_s); sleep 3
     
     id = XDo::XWindow.wait_for_window(browser)
-    xwin = XDo::XWindow.new(id)
-    title = xwin.title
+    @xwin = XDo::XWindow.new(id)
+    title = @xwin.title
     puts 'title:  ' + title.inspect if @debug
 
     # WMCtrl is used because XDo is problematic at trying to activate a window
@@ -58,6 +59,7 @@ class XAutoBrowse
     Thread.new { open_web_console(); sleep 1; close_web_console() }
     
     connect()
+    
   end
   
   # custom accesskey (e.g. CTRL+SHIFT+S) typically used to reference an 
@@ -70,6 +72,7 @@ class XAutoBrowse
   def activate()
     @wm.action_window(@id, :activate)
   end
+
   
   # Attaches the SPS client to the web browser. The SPS broker must be 
   # started before the code can be attached. see start_broker()
@@ -78,13 +81,19 @@ class XAutoBrowse
     
     activate()
     open_web_console(); sleep 1
-    
+
+    clipboard = Clipboard.paste    
     Clipboard.copy javascript(); sleep 1
     ctrl_v(); sleep 0.5
     carriage_return()
     
     close_web_console() if autohide
+    Clipboard.copy clipboard
     
+  end
+  
+  def close()
+    ctrl_w()
   end
   
   def close_web_console()
@@ -97,7 +106,7 @@ class XAutoBrowse
   def connect()
 
     start_broker()
-    sleep 5
+    sleep 4
     connect_controller()
   end
   
@@ -137,10 +146,19 @@ class XAutoBrowse
   # paste
   #
   def ctrl_v() send_keys(:ctrl_v)  end
+    
+  # close the current window
+  #
+  def ctrl_w() send_keys(:ctrl_w)  end    
 
   # developer tools
   #
   def ctrl_shift_i() send_keys(:ctrl_shift_i) end    
+    
+  def height=(val)
+    @height = val
+    @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
+  end        
   
   # submit a form by pressing return
   #
@@ -186,7 +204,7 @@ class XAutoBrowse
     console  = @browser == :firefox ? :ctrl_shift_k : :ctrl_shift_i
     method(console).call # web console
     
-    sleep 3    
+    sleep 2    
     
   end
   
@@ -249,6 +267,11 @@ class XAutoBrowse
     ctrl_u()  # View source code
     
   end  
+  
+  def width=(val)
+    @width = val
+    @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
+  end    
   
   # input some text
   #
