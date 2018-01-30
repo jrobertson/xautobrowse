@@ -11,6 +11,8 @@
 # 30 Jan 2018: feature: Now uses the gem universal_dom_remote to 
 #                       connect to the browser via websockets. 
 #                       A window can now be closed remotely.
+#                       SPS is now optional given there is no secure 
+#                       websockets support
 # 28 Jan 2018: feature: Chromium is now supported. 
 #                     A custom accesskey can now be used to jump to an element.
 
@@ -29,36 +31,78 @@ class XAutoBrowse
   
   at_exit() do
     
-    puts 'shutting down ...'
-    EventMachine.stop
-    SPSPub.notice('shutdown', host: '127.0.0.1', port: '55000'); sleep 0.5    
+    if @sps then
+      puts 'shutting down ...'
+      EventMachine.stop
+      SPSPub.notice('shutdown', host: '127.0.0.1', port: '55000'); sleep 0.5
+    end
     
   end
   
+  class Window
+    
+    def initialize(browser)
+            
+      @wm = WMCtrl.instance
+      spawn(browser.to_s); sleep 3
+      
+      id = XDo::XWindow.wait_for_window(browser)
+      xwin = XDo::XWindow.new(id)
+      title = xwin.title
+      puts 'title:  ' + title.inspect if @debug
 
-  def initialize(browser= :firefox, debug: false)
+      # WMCtrl is used because XDo is problematic at trying to activate a window
+      
+      a = @wm.list_windows true
+      puts 'a: '  + a.inspect if @debug
+      r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
+      @id = r[:id]
+
+      @x, @y, @width, @height = *r[:geometry]      
+      sleep 4
+      
+    end
+    
+    def activate()
+      @wm.action_window(@id, :activate)
+    end
+    
+    def height=(val)
+      @height = val
+      @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
+    end            
+    
+    def move(x,y)
+      @x, @y = x, y
+      @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
+    end    
+    
+    def resize_to(width, height)
+      @width, @height = width, height
+      @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
+    end
+    
+    alias resize resize_to
+
+    def width=(val)
+      @width = val
+      @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
+    end        
+  end
+  
+  attr_reader :window
+  
+  
+  def initialize(browser= :firefox, debug: false, sps: false)
 
     @browser, @debug = browser, debug
     
-    @wm = WMCtrl.instance
-    spawn(browser.to_s); sleep 3
-    
-    id = XDo::XWindow.wait_for_window(browser)
-    @xwin = XDo::XWindow.new(id)
-    title = @xwin.title
-    puts 'title:  ' + title.inspect if @debug
-
-    # WMCtrl is used because XDo is problematic at trying to activate a window
-    
-    a = @wm.list_windows true
-    puts 'a: '  + a.inspect if @debug
-    r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
-    @id = r[:id]
-
-    @x, @y, @width, @height = *r[:geometry]
+    @window = Window.new browser
+    sleep 4
     Thread.new { open_web_console(); sleep 1; close_web_console() }
     
-    connect()
+    @sps = sps
+    connect() if sps
     
   end
   
@@ -68,18 +112,13 @@ class XAutoBrowse
   def accesskey(key) send_keys(key.to_sym)  end
   
   alias access_key accesskey
-
-  def activate()
-    @wm.action_window(@id, :activate)
-  end
-
   
   # Attaches the SPS client to the web browser. The SPS broker must be 
   # started before the code can be attached. see start_broker()
   #
   def attach_console(autohide: true)
     
-    activate()
+    @window.activate()
     open_web_console(); sleep 1
 
     clipboard = Clipboard.paste    
@@ -97,7 +136,7 @@ class XAutoBrowse
   end
   
   def close_web_console()
-    activate()
+    @window.activate()
     ctrl_shift_i()
   end
   
@@ -118,18 +157,38 @@ class XAutoBrowse
     
   end
   
+  def copy_screen()
+    select_all(); sleep 2; ctrl_c(); sleep 2
+    unselect_all()
+    Clipboard.paste    
+  end
+  
+  alias scrape_screen copy_screen
+  
   def copy_source()
     
     view_source(); sleep 3
-    ctrl_a() # select all
+    select all()
     sleep 1
     ctrl_c() # copy the source code to the clipboard
+    sleep 1
+    ctrl_w() # close the viewsource window
     
   end
   
   # select all
   #
   def ctrl_a() send_keys(:ctrl_a)  end
+    
+  # unselect all
+  #
+  def ctrl_shift_a()
+
+    XDo::Keyboard.key_down('shift')
+    send_keys(:ctrl_a)
+    XDo::Keyboard.key_up('shift')    
+
+  end    
   
   # copy
   #
@@ -154,19 +213,14 @@ class XAutoBrowse
   # developer tools
   #
   def ctrl_shift_i() send_keys(:ctrl_shift_i) end    
-    
-  def height=(val)
-    @height = val
-    @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
-  end        
-  
+      
   # submit a form by pressing return
   #
   def go()
     
     if block_given? then
       
-      activate(); sleep 2    
+      @window.activate(); sleep 2    
       yield(self)     
       carriage_return()
       
@@ -174,26 +228,17 @@ class XAutoBrowse
     
   end
   
-  def goto(url)
+  def goto(url, attachconsole: true)
     
-    activate(); sleep 0.5
-    ctrl_l();   sleep 0.5
-    enter(url); sleep 4
-    attach_console()
+    @window.activate(); sleep 2
+    ctrl_l();   sleep 1
+    enter(url); sleep 7
+    attach_console() if @sps and attachconsole
 
   end  
-
-  def move(x,y)
-    @x, @y = x, y
-    @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
-  end
-
-  def resize(width, height)
-    @width, @height = width, height
-    @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
-  end
   
   def carriage_return()
+    @window.activate(); sleep 1
     XDo::Keyboard.return
   end
   
@@ -204,12 +249,31 @@ class XAutoBrowse
     console  = @browser == :firefox ? :ctrl_shift_k : :ctrl_shift_i
     method(console).call # web console
     
-    sleep 2    
+    sleep 2
+    
+    if block_given? then
+      yield(self)
+      close_web_console()
+    end
     
   end
   
   def send(s)
     @udr.send s
+  end
+    
+  def select_all()
+    ctrl_a()
+  end
+  
+  def unselect_all()
+    
+    if @browser == :firefox then
+      tab(); shift_tab()
+    else
+      ctrl_shift_a()
+    end
+    
   end
   
   # Starts the simplepubsub broker
@@ -226,8 +290,17 @@ class XAutoBrowse
     SPSPub.notice 'shutdown', host: '127.0.0.1', port: '55000'
   end
   
+  def shift_tab(n=1)
+    
+    @window.activate()
+    XDo::Keyboard.key_down('shift')
+    XDo::Keyboard.simulate("{TAB}" * n)
+    XDo::Keyboard.key_up('shift')
+    
+  end
+  
   def tab(n=1)
-    activate()
+    @window.activate()
     XDo::Keyboard.simulate("{TAB}" * n)
   end
   
@@ -256,11 +329,11 @@ class XAutoBrowse
   
   # type some text
   #
-  def type(s)  activate(); XDo::Keyboard.type(s)  end
+  def type(s)  @window.activate(); XDo::Keyboard.type(s)  end
   
   def view_source()
     
-    activate(); sleep 0.5
+    @window.activate(); sleep 0.5
     ctrl_l() # jump to the location bar
     sleep 0.6
     tab(2); sleep 0.5
@@ -268,10 +341,6 @@ class XAutoBrowse
     
   end  
   
-  def width=(val)
-    @width = val
-    @wm.action_window(@id, :move_resize, 0, @x, @y, @width, @height)
-  end    
   
   # input some text
   #
@@ -315,7 +384,7 @@ ws.onmessage = function(event) {
   
   def send_keys(keys)
     
-    activate(); XDo::Keyboard.send keys.to_sym    
+    @window.activate(); XDo::Keyboard.send keys.to_sym    
     
   end
 end
