@@ -6,8 +6,10 @@
 #              Primarily tested using Firefox (52.6.0 (64-bit)) on Debian.
 
 
-# modifications
+# revision log:
 
+# 31 Jan 2018: feature: Implemented XAutoBrowse#click which accepts a key of 
+#                       an element to be clicked e.g. click :logout
 # 30 Jan 2018: feature: Now uses the gem universal_dom_remote to 
 #                       connect to the browser via websockets. 
 #                       A window can now be closed remotely.
@@ -15,6 +17,12 @@
 #                       websockets support
 # 28 Jan 2018: feature: Chromium is now supported. 
 #                     A custom accesskey can now be used to jump to an element.
+
+# Helpful tip: To identify the id for a web page element, using the mouse 
+#      right-click on the element, select inspect. Then from the inspection 
+#      window, hover the mouse over the element code, using the mouse, 
+#      right-click, select copy, inner HTML. 
+#      Then paste the code to a new notepad document for inspection.
 
 
 require 'wmctrl'
@@ -91,15 +99,16 @@ class XAutoBrowse
   end
   
   attr_reader :window
+  attr_accessor :actions
   
   
-  def initialize(browser= :firefox, debug: false, sps: false)
+  def initialize(browser= :firefox, debug: false, sps: false, clicks: {})
 
-    @browser, @debug = browser, debug
+    @browser, @debug, @clicks = browser, debug, clicks
     
     @window = Window.new browser
     sleep 4
-    Thread.new { open_web_console(); sleep 1; close_web_console() }
+    Thread.new { open_web_console() { sleep 1 } }
     
     @sps = sps
     connect() if sps
@@ -111,7 +120,7 @@ class XAutoBrowse
   #
   def accesskey(key) send_keys(key.to_sym)  end
   
-  alias access_key accesskey
+  alias access_key accesskey  
   
   # Attaches the SPS client to the web browser. The SPS broker must be 
   # started before the code can be attached. see start_broker()
@@ -130,6 +139,12 @@ class XAutoBrowse
     Clipboard.copy clipboard
     
   end
+  
+  def click(name)
+    
+    open_web_console {|x| x.enter @clicks[name] + '.click();' }
+    
+  end  
   
   def close()
     ctrl_w()
@@ -168,7 +183,7 @@ class XAutoBrowse
   def copy_source()
     
     view_source(); sleep 3
-    select all()
+    select_all()
     sleep 1
     ctrl_c() # copy the source code to the clipboard
     sleep 1
