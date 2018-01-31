@@ -10,7 +10,7 @@
     require 'xautobrowse'
 
     browser = XAutoBrowse.new 'firefox'
-    browser.move 0,0
+    browser.window.move 0,0
     browser.goto "http://www.jamesrobertson.eu"
 
     # search snippets using keyword 'dynarex'
