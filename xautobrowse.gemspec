@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'xautobrowse'
-  s.version = '0.2.3'
+  s.version = '0.2.4'
   s.summary = "A poor man's web automation tool primarily for " + \
       "Firefox in an X windows system."
   s.authors = ['James Robertson']

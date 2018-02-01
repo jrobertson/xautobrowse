@@ -8,6 +8,7 @@
 
 # revision log:
 
+#  1 Feb 2018: feature: Implemented XAutoBrowse#screenshot
 # 31 Jan 2018: feature: Implemented XAutoBrowse#click which accepts a key of 
 #                       an element to be clicked e.g. click :logout
 # 30 Jan 2018: feature: Now uses the gem universal_dom_remote to 
@@ -104,13 +105,12 @@ class XAutoBrowse
   
   def initialize(browser= :firefox, debug: false, sps: false, clicks: {})
 
-    @browser, @debug, @clicks = browser, debug, clicks
+    @browser, @debug, @sps, @clicks = browser, debug, sps, clicks
     
-    @window = Window.new browser
-    sleep 4
-    Thread.new { open_web_console() { sleep 1 } }
+    @window = Window.new(browser); sleep 2
+    #Thread.new { web_console() { sleep 1 } }
+    sleep 2
     
-    @sps = sps
     connect() if sps
     
   end
@@ -132,8 +132,7 @@ class XAutoBrowse
 
     clipboard = Clipboard.paste    
     Clipboard.copy javascript(); sleep 1
-    ctrl_v(); sleep 0.5
-    carriage_return()
+    ctrl_v(); sleep 0.5; carriage_return()
     
     close_web_console() if autohide
     Clipboard.copy clipboard
@@ -142,13 +141,15 @@ class XAutoBrowse
   
   def click(name)
     
-    open_web_console {|x| x.enter @clicks[name] + '.click();' }
+    web_console {|x| x.enter @clicks[name] + '.click();' }
     
   end  
   
   def close()
     ctrl_w()
   end
+  
+  alias exit close
   
   def close_web_console()
     @window.activate()
@@ -159,9 +160,8 @@ class XAutoBrowse
   
   def connect()
 
-    start_broker()
-    sleep 4
-    connect_controller()
+    start_broker(); sleep 4; connect_controller()
+    
   end
   
   # Connects to the SPS broker to communicate with the web browser
@@ -173,8 +173,7 @@ class XAutoBrowse
   end
   
   def copy_screen()
-    select_all(); sleep 2; ctrl_c(); sleep 2
-    unselect_all()
+    select_all(); sleep 2; ctrl_c(); sleep 2; unselect_all()
     Clipboard.paste    
   end
   
@@ -183,8 +182,7 @@ class XAutoBrowse
   def copy_source()
     
     view_source(); sleep 3
-    select_all()
-    sleep 1
+    select_all(); sleep 1
     ctrl_c() # copy the source code to the clipboard
     sleep 1
     ctrl_w() # close the viewsource window
@@ -235,9 +233,7 @@ class XAutoBrowse
     
     if block_given? then
       
-      @window.activate(); sleep 2    
-      yield(self)     
-      carriage_return()
+      @window.activate(); sleep 1; yield(self); carriage_return()
       
     end
     
@@ -245,16 +241,14 @@ class XAutoBrowse
   
   def goto(url, attachconsole: true)
     
-    @window.activate(); sleep 2
-    ctrl_l();   sleep 1
-    enter(url); sleep 7
+    sleep 1; ctrl_l(); sleep 2
+    enter(url); sleep 5
     attach_console() if @sps and attachconsole
 
   end  
   
   def carriage_return()
-    @window.activate(); sleep 1
-    XDo::Keyboard.return
+    @window.activate(); sleep 1; XDo::Keyboard.return
   end
   
   alias cr carriage_return
@@ -273,6 +267,28 @@ class XAutoBrowse
     
   end
   
+  alias web_console open_web_console
+  
+  # Takes a screenshot of the web page. Images are stored in ~/Pictures
+  #
+  def screenshot(filename=Time.now\
+                 .strftime("Screenshot from %Y-%m-%d %d-%m-%y"))
+    
+    XDo::Keyboard.simulate('{print}'); 
+    sleep 4; 
+    XDo::Keyboard.simulate("{down}")
+    sleep 4; 
+    XDo::Keyboard.alt_s    
+    sleep 5;
+    XDo::Keyboard.type filename
+    sleep 3
+    XDo::Keyboard.alt_s
+    sleep 1
+    
+  end
+  
+  alias screen_capture screenshot
+  
   def send(s)
     @udr.send s
   end
@@ -283,11 +299,7 @@ class XAutoBrowse
   
   def unselect_all()
     
-    if @browser == :firefox then
-      tab(); shift_tab()
-    else
-      ctrl_shift_a()
-    end
+    @browser == :firefox ? (tab(); shift_tab()) : ctrl_shift_a()
     
   end
   
@@ -315,25 +327,26 @@ class XAutoBrowse
   end
   
   def tab(n=1)
-    @window.activate()
-    XDo::Keyboard.simulate("{TAB}" * n)
+    @window.activate(); XDo::Keyboard.simulate("{TAB}" * n)
   end
   
   def text_field(klass: nil, id: nil, name: nil, value: '')
     
-    open_web_console()
+    open_web_console() do |console|
     
-    cmd = if klass then
-      "r = document.querySelector('#{klass}')"
-    elsif id then
-      "r = document.getElementById(\"#{id}\")"
-    end
+      cmd = if klass then
+        "querySelector('#{klass}')"
+      elsif id then
+        "getElementById(\"#{id}\")"
+      end
 
-    [cmd, "r.value = \"\"", "r.focus()"].each {|x| enter x}
+      ['r = document.' + cmd, "r.value = \"\"", "r.focus()"].each do |x|
+        console.enter x
+      end
     
-    ctrl_shift_i()  # toggle tools
-    sleep 2
-    type(value); sleep 1
+    end
+    
+    sleep 2; type(value); sleep 1
 
   end
   
@@ -350,9 +363,7 @@ class XAutoBrowse
     
     @window.activate(); sleep 0.5
     ctrl_l() # jump to the location bar
-    sleep 0.6
-    tab(2); sleep 0.5
-    ctrl_u()  # View source code
+    sleep 0.6; tab(2); sleep 0.5; ctrl_u()  # View source code
     
   end  
   
