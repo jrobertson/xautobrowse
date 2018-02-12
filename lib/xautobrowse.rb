@@ -8,6 +8,9 @@
 
 # revision log:
 
+# 12 Feb 2018: bug fix: Implemented the missing method ctrl_shift_k() used 
+#      to access developer tools from Firefox. The browser variable is now a 
+#      symbolic string instead of a regular string as required by the code.
 #  1 Feb 2018: feature: Implemented XAutoBrowse#screenshot
 # 31 Jan 2018: feature: Implemented XAutoBrowse#click which accepts a key of 
 #                       an element to be clicked e.g. click :logout
@@ -36,6 +39,7 @@ require 'sps-pub'
 require 'universal_dom_remote'
 
 
+
 class XAutoBrowse
   
   at_exit() do
@@ -55,7 +59,7 @@ class XAutoBrowse
       @wm = WMCtrl.instance
       spawn(browser.to_s); sleep 3
       
-      id = XDo::XWindow.wait_for_window(browser)
+      id = XDo::XWindow.wait_for_window(browser.to_s)
       xwin = XDo::XWindow.new(id)
       title = xwin.title
       puts 'title:  ' + title.inspect if @debug
@@ -105,7 +109,7 @@ class XAutoBrowse
   
   def initialize(browser= :firefox, debug: false, sps: false, clicks: {})
 
-    @browser, @debug, @sps, @clicks = browser, debug, sps, clicks
+    @browser, @debug, @sps, @clicks = browser.to_sym, debug, sps, clicks
     
     @window = Window.new(browser); sleep 2
     #Thread.new { web_console() { sleep 1 } }
@@ -223,9 +227,13 @@ class XAutoBrowse
   #
   def ctrl_w() send_keys(:ctrl_w)  end    
 
-  # developer tools
+  # Chromium developer tools
   #
-  def ctrl_shift_i() send_keys(:ctrl_shift_i) end    
+  def ctrl_shift_i() send_keys(:ctrl_shift_i) end
+
+  # Firefox developer tools
+  #
+  def ctrl_shift_k() send_keys(:ctrl_shift_k) end
       
   # submit a form by pressing return
   #
