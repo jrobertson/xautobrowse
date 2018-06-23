@@ -6,8 +6,11 @@
 #              Primarily tested using Firefox (52.6.0 (64-bit)) on Debian.
 
 
+
 # revision log:
 
+# 23 Jun 2018: feature: A new Window can now be created which attaches itself 
+#                       to the most recent application window created
 # 12 Feb 2018: bug fix: Implemented the missing method ctrl_shift_k() used 
 #      to access developer tools from Firefox. The browser variable is now a 
 #      symbolic string instead of a regular string as required by the code.
@@ -54,25 +57,33 @@ class XAutoBrowse
   
   class Window
     
-    def initialize(browser)
+    def initialize(browser=nil)
             
       @wm = WMCtrl.instance
-      spawn(browser.to_s); sleep 3
       
-      id = XDo::XWindow.wait_for_window(browser.to_s)
-      xwin = XDo::XWindow.new(id)
-      title = xwin.title
-      puts 'title:  ' + title.inspect if @debug
+      if browser then
+        spawn(browser.to_s); sleep 3
+        
+        id = XDo::XWindow.wait_for_window(browser.to_s)
 
-      # WMCtrl is used because XDo is problematic at trying to activate a window
+        xwin = XDo::XWindow.new(id)
+        title = xwin.title
+        puts 'title:  ' + title.inspect if @debug
+
+        # WMCtrl is used because XDo is problematic at trying to activate a window
+        
+        a = @wm.list_windows true
+        puts 'a: '  + a.inspect if @debug
+        r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
+      else
+        a = @wm.list_windows true
+        r = a.last
+      end      
       
-      a = @wm.list_windows true
-      puts 'a: '  + a.inspect if @debug
-      r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
       @id = r[:id]
 
       @x, @y, @width, @height = *r[:geometry]      
-      sleep 4
+      sleep 4 unless browser
       
     end
     
@@ -277,6 +288,10 @@ class XAutoBrowse
   
   alias web_console open_web_console
   
+  def new_window()
+    @window = Window.new
+  end
+  
   # Takes a screenshot of the web page. Images are stored in ~/Pictures
   #
   def screenshot(filename=Time.now\
@@ -378,7 +393,17 @@ class XAutoBrowse
   
   # input some text
   #
-  def enter(s) type(s); sleep 0.8; carriage_return(); sleep 1  end
+  def enter(s=nil)
+    
+    if s then
+      type(s)
+      sleep 0.8
+    end
+    
+    carriage_return()
+    sleep 1
+    
+  end
 
     
   private
