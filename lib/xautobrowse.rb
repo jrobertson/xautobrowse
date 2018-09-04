@@ -9,6 +9,7 @@
 
 # revision log:
 
+#  4 Sep 2018: feature: Tabs can now be traversed using the XTabbedWindow gem
 # 23 Jun 2018: feature: A new Window can now be created which attaches itself 
 #                       to the most recent application window created
 # 12 Feb 2018: bug fix: Implemented the missing method ctrl_shift_k() used 
@@ -32,12 +33,12 @@
 #      Then paste the code to a new notepad document for inspection.
 
 
-require 'wmctrl'
+#require 'wmctrl'
 require 'nokorexi'
 require 'clipboard'
-require 'xdo/mouse'
-require 'xdo/keyboard'
-require 'xdo/xwindow'
+#require 'xdo/mouse'
+#require 'xdo/keyboard'
+#require 'xdo/xwindow'
 require 'sps-pub'
 require 'universal_dom_remote'
 
@@ -55,26 +56,32 @@ class XAutoBrowse
     
   end
   
-  class Window
+  class Window < XTabbedWindow
     
-    def initialize(browser=nil)
+    def initialize(browser=nil, new_win: true)
             
       @wm = WMCtrl.instance
       
       if browser then
-        spawn(browser.to_s); sleep 3
         
-        id = XDo::XWindow.wait_for_window(browser.to_s)
+        if new_win then
+          spawn(browser.to_s); sleep 3
+          
+          id = XDo::XWindow.wait_for_window(browser.to_s)
 
-        xwin = XDo::XWindow.new(id)
-        title = xwin.title
-        puts 'title:  ' + title.inspect if @debug
+          xwin = XDo::XWindow.new(id)
+          title = xwin.title
+          puts 'title:  ' + title.inspect if @debug
 
-        # WMCtrl is used because XDo is problematic at trying to activate a window
-        
-        a = @wm.list_windows true
-        puts 'a: '  + a.inspect if @debug
-        r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
+          # WMCtrl is used because XDo is problematic at trying to activate a window
+          
+          a = @wm.list_windows true
+          puts 'a: '  + a.inspect if @debug
+          r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
+        else
+          super(browser)
+          r = @window
+        end
       else
         a = @wm.list_windows true
         r = a.last
@@ -118,13 +125,15 @@ class XAutoBrowse
   attr_accessor :actions
   
   
-  def initialize(browser= :firefox, debug: false, sps: false, clicks: {})
+  def initialize(browser= :firefox, new_window: true, debug: false, 
+                 sps: false, clicks: {})
 
     @browser, @debug, @sps, @clicks = browser.to_sym, debug, sps, clicks
+    @new_window = new_window
     
-    @window = Window.new(browser); sleep 2
-    #Thread.new { web_console() { sleep 1 } }
-    sleep 2
+    @window = Window.new(browser, new_win: new_window)
+
+    sleep 4 if new_window
     
     connect() if sps
     
@@ -258,13 +267,20 @@ class XAutoBrowse
     
   end
   
-  def goto(url, attachconsole: true)
+  def goto(url, attachconsole: true, new_tab: !@new_window)
     
-    sleep 1; ctrl_l(); sleep 2
-    enter(url); sleep 5
+    new_tab() if new_tab
+    sleep 1; ctrl_l()
+    sleep 2 if @new_window
+    enter(url)
+    sleep 5 if @new_window
     attach_console() if @sps and attachconsole
 
-  end  
+  end
+
+  def goto_tab(s)
+    @window.goto_tab(s)
+  end
   
   def carriage_return()
     @window.activate(); sleep 1; XDo::Keyboard.return
@@ -290,6 +306,10 @@ class XAutoBrowse
   
   def new_window()
     @window = Window.new
+  end
+  
+  def new_tab()
+    @window.new_tab
   end
   
   # Takes a screenshot of the web page. Images are stored in ~/Pictures
@@ -351,6 +371,10 @@ class XAutoBrowse
   
   def tab(n=1)
     @window.activate(); XDo::Keyboard.simulate("{TAB}" * n)
+  end
+  
+  def tab?(s)
+    @window.tab?(s)
   end
   
   def text_field(klass: nil, id: nil, name: nil, value: '')
