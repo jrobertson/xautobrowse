@@ -40,6 +40,7 @@ require 'clipboard'
 #require 'xdo/keyboard'
 #require 'xdo/xwindow'
 require 'sps-pub'
+require 'xtabbedwindow'
 require 'universal_dom_remote'
 
 
@@ -58,7 +59,7 @@ class XAutoBrowse
   
   class Window < XTabbedWindow
     
-    def initialize(browser=nil, new_win: true)
+    def initialize(browser=nil, new_win: true, scan_tabs: false)
             
       @wm = WMCtrl.instance
       
@@ -79,7 +80,7 @@ class XAutoBrowse
           puts 'a: '  + a.inspect if @debug
           r = a.reverse.find {|x| x[:title] =~ /#{browser}$/i}
         else
-          super(browser)
+          super(browser, scan_tabs: scan_tabs)
           r = @window
         end
       else
@@ -126,12 +127,12 @@ class XAutoBrowse
   
   
   def initialize(browser= :firefox, new_window: true, debug: false, 
-                 sps: false, clicks: {})
+                 sps: false, clicks: {}, scan_tabs: !new_window)
 
     @browser, @debug, @sps, @clicks = browser.to_sym, debug, sps, clicks
     @new_window = new_window
     
-    @window = Window.new(browser, new_win: new_window)
+    @window = Window.new(browser, new_win: new_window, scan_tabs: scan_tabs)
 
     sleep 4 if new_window
     
@@ -395,6 +396,10 @@ class XAutoBrowse
     
     sleep 2; type(value); sleep 1
 
+  end
+  
+  def title()
+    @window.title
   end
   
   def to_doc()
