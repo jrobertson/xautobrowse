@@ -9,6 +9,7 @@
 
 # revision log:
 
+#  5 Sep 2018: feature: A new tab can now be opened if it does not exist.
 #  4 Sep 2018: feature: Tabs can now be traversed using the XTabbedWindow gem
 # 23 Jun 2018: feature: A new Window can now be created which attaches itself 
 #                       to the most recent application window created
@@ -279,8 +280,14 @@ class XAutoBrowse
 
   end
 
-  def goto_tab(s)
-    @window.goto_tab(s)
+  def goto_tab(s, url=nil)
+    
+    if url then      
+      @window.goto_tab(s) { enter url}
+    else
+      @window.goto_tab(s)
+    end
+    
   end
   
   def carriage_return()
