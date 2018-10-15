@@ -9,6 +9,8 @@
 
 # revision log:
 
+# 15 Oct 2018: feature: The keyword *context* can be used to specify the 
+#                       parent element of the document
 #  5 Sep 2018: feature: A new tab can now be opened if it does not exist.
 #  4 Sep 2018: feature: Tabs can now be traversed using the XTabbedWindow gem
 # 23 Jun 2018: feature: A new Window can now be created which attaches itself 
@@ -124,14 +126,17 @@ class XAutoBrowse
   end
   
   attr_reader :window
-  attr_accessor :actions
+  attr_accessor :actions, :context
+  
+  # note: context is the parent of the document element e.g. frames[0]
+  
   
   
   def initialize(browser= :firefox, new_window: true, debug: false, 
-                 sps: false, clicks: {}, scan_tabs: !new_window)
+                 sps: false, clicks: {}, scan_tabs: !new_window, context: nil)
 
     @browser, @debug, @sps, @clicks = browser.to_sym, debug, sps, clicks
-    @new_window = new_window
+    @new_window, @context = new_window, context
     
     @window = Window.new(browser, new_win: new_window, scan_tabs: scan_tabs)
 
@@ -167,7 +172,9 @@ class XAutoBrowse
   
   def click(name)
     
-    web_console {|x| x.enter @clicks[name] + '.click();' }
+    web_console do |x| 
+      x.enter [@context, @clicks[name]].compact.join('.') + '.click();'
+    end
     
   end  
   
@@ -296,6 +303,12 @@ class XAutoBrowse
   
   alias cr carriage_return
   
+  def method_missing(method_name, *args)
+    if method_name.to_s =~ /^alt/ then
+      send_keys method_name
+    end
+  end  
+  
   def open_web_console()
     
     console  = @browser == :firefox ? :ctrl_shift_k : :ctrl_shift_i
@@ -381,6 +394,9 @@ class XAutoBrowse
     @window.activate(); XDo::Keyboard.simulate("{TAB}" * n)
   end
   
+  # determines if the given tabbed window title exists 
+  # for the given tabbed windows
+  #
   def tab?(s)
     @window.tab?(s)
   end
@@ -395,9 +411,13 @@ class XAutoBrowse
         "getElementById(\"#{id}\")"
       end
 
-      ['r = document.' + cmd, "r.value = \"\"", "r.focus()"].each do |x|
-        console.enter x
-      end
+      a = [
+        'r = ' + [@context, 'document'].compact.join('.') + '.' + cmd, 
+        "r.value = \"\"", 
+        "r.focus()"
+      ]
+                                               
+      a.each {|x| console.enter x }
     
     end
     
