@@ -9,8 +9,7 @@
 
 # revision log:
 
-# 15 Oct 2018: feature: The keyword *context* can be used to specify the 
-#                       parent element of the document
+#  4 Sep 2019: feature: Added methods *slow_type* and *slow_tab*
 #  5 Sep 2018: feature: A new tab can now be opened if it does not exist.
 #  4 Sep 2018: feature: Tabs can now be traversed using the XTabbedWindow gem
 # 23 Jun 2018: feature: A new Window can now be created which attaches itself 
@@ -34,6 +33,7 @@
 #      window, hover the mouse over the element code, using the mouse, 
 #      right-click, select copy, inner HTML. 
 #      Then paste the code to a new notepad document for inspection.
+
 
 
 #require 'wmctrl'
@@ -133,10 +133,11 @@ class XAutoBrowse
   
   
   def initialize(browser= :firefox, new_window: true, debug: false, 
-                 sps: false, clicks: {}, scan_tabs: !new_window, context: nil)
+                 sps: false, clicks: {}, scan_tabs: !new_window, 
+                 context: nil, text_fields: {})
 
     @browser, @debug, @sps, @clicks = browser.to_sym, debug, sps, clicks
-    @new_window, @context = new_window, context
+    @new_window, @context, @text_fields = new_window, context, text_fields
     
     @window = Window.new(browser, new_win: new_window, scan_tabs: scan_tabs)
 
@@ -367,6 +368,22 @@ class XAutoBrowse
     
   end
   
+  def slow_tab(n=1, seconds: 0.5)
+    n.times {XDo::Keyboard.simulate("{TAB}"; sleep seconds}
+  end
+  
+  def slow_type(s, seconds: 0.6)
+    
+    #@window.activate(); 
+    sleep 0.3
+    
+    s.split(//).each do |c|
+      XDo::Keyboard.type(c)
+      sleep seconds
+    end
+  end
+
+  
   # Starts the simplepubsub broker
   
   def start_broker()
@@ -401,7 +418,7 @@ class XAutoBrowse
     @window.tab?(s)
   end
   
-  def text_field(klass: nil, id: nil, name: nil, value: '')
+  def text_field(id2, klass: nil, id: nil, name: nil, value: '')
     
     open_web_console() do |console|
     
@@ -409,6 +426,8 @@ class XAutoBrowse
         "querySelector('#{klass}')"
       elsif id then
         "getElementById(\"#{id}\")"
+      elsif name then
+        @text_fields[id2]
       end
 
       a = [
