@@ -369,7 +369,7 @@ class XAutoBrowse
   end
   
   def slow_tab(n=1, seconds: 0.5)
-    n.times {XDo::Keyboard.simulate("{TAB}"; sleep seconds}
+    n.times {XDo::Keyboard.simulate("{TAB}"); sleep seconds}
   end
   
   def slow_type(s, seconds: 0.6)
